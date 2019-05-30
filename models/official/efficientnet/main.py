@@ -164,6 +164,8 @@ flags.DEFINE_string(
           ' will improve performance.'))
 flags.DEFINE_integer(
     'num_label_classes', default=1000, help='Number of classes, at least 2')
+flags.DEFINE_integer(
+    'num_gpus', default=1, help='Number of gpu, at least 1')
 flags.DEFINE_float(
     'batch_norm_momentum',
     default=None,
@@ -471,13 +473,12 @@ def model_fn(features, labels, mode, params):
     saver = tf.train.Saver(restore_vars_dict)
     return tf.train.Scaffold(saver=saver)
 
-  return tf.contrib.tpu.TPUEstimatorSpec(
+  return tf.estimator.EstimatorSpec(
       mode=mode,
       loss=loss,
       train_op=train_op,
-      host_call=host_call,
-      eval_metrics=eval_metrics,
-      scaffold_fn=_scaffold_fn if has_moving_average_decay else None)
+      eval_metric_ops=eval_metrics,
+      scaffold=_scaffold_fn if has_moving_average_decay else None)
 
 
 def _verify_non_empty_string(value, field_name):
@@ -577,6 +578,7 @@ def main(unused_argv):
     save_checkpoints_steps = None
   else:
     save_checkpoints_steps = max(100, FLAGS.iterations_per_loop)
+  '''
   config = tf.contrib.tpu.RunConfig(
       cluster=tpu_cluster_resolver,
       model_dir=FLAGS.model_dir,
@@ -590,17 +592,29 @@ def main(unused_argv):
           iterations_per_loop=FLAGS.iterations_per_loop,
           per_host_input_for_training=tf.contrib.tpu.InputPipelineConfig
           .PER_HOST_V2))  # pylint: disable=line-too-long
+  '''
+  distribution_strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=FLAGS.num_gpus)
+
+  config = tf.estimator.RunConfig(
+                  model_dir=FLAGS.model_dir,
+                  session_config=tf.ConfigProto(
+                    graph_options=tf.GraphOptions(
+                    rewrite_options=rewriter_config_pb2.RewriterConfig(
+                    disable_meta_optimizer=True))),
+                  train_distribute=distribution_strategy,
+                  save_checkpoints_steps=save_checkpoints_steps,
+                  log_step_count_steps=FLAGS.log_step_count_steps,
+                  )
   # Initializes model parameters.
+  batch_size = int(FLAGS.train_batch_size / FLAGS.num_gpus)
+  print('@@BATCH_SIZE1={}, num_gpus={}'.format(batch_size, FLAGS.num_gpus))
   params = dict(
       steps_per_epoch=FLAGS.num_train_images / FLAGS.train_batch_size,
-      use_bfloat16=FLAGS.use_bfloat16)
-  est = tf.contrib.tpu.TPUEstimator(
-      use_tpu=FLAGS.use_tpu,
+      use_bfloat16=FLAGS.use_bfloat16,
+      batch_size=batch_size)
+  est = tf.estimator.Estimator(
       model_fn=model_fn,
       config=config,
-      train_batch_size=FLAGS.train_batch_size,
-      eval_batch_size=FLAGS.eval_batch_size,
-      export_to_tpu=FLAGS.export_to_tpu,
       params=params)
 
   # Input pipelines are slightly different (with regards to shuffling and

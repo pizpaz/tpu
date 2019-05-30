@@ -150,6 +150,7 @@ class ImageNetTFExampleInput(object):
     # computed according to the input pipeline deployment. See
     # tf.contrib.tpu.RunConfig for details.
     batch_size = params['batch_size']
+    print('@@@BATCH_SIZE={}'.format(batch_size))
 
     if 'context' in params:
       current_host = params['context'].current_input_fn_deployment()[1]
@@ -268,6 +269,8 @@ class ImageNetInput(ImageNetTFExampleInput):
     # Shuffle the filenames to ensure better randomization.
     file_pattern = os.path.join(
         self.data_dir, 'train-*' if self.is_training else 'validation-*')
+    print('@@data_dir = {}'.format(self.data_dir))
+    print('@@@FILE_PATTERN = {}'.format(file_pattern))
 
     # For multi-host training, we want each hosts to always process the same
     # subset of files.  Each host only sees a subset of the entire dataset,
