@@ -225,7 +225,8 @@ def build_model_base(images, model_name, training, override_params=None):
 
   with tf.variable_scope(model_name):
     model = efficientnet_model.Model(blocks_args, global_params)
-    features = model(images, training=training, features_only=True)
+    #features = model(images, training=training, features_only=True)
+    features = model(images, training=training, features_only=False)
 
   features = tf.identity(features, 'global_pool')
   return features, model.endpoints

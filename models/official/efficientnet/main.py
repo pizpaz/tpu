@@ -60,6 +60,10 @@ flags.DEFINE_string(
     help='GCE zone where the Cloud TPU is located in. If not specified, we '
     'will attempt to automatically detect the GCE project from metadata.')
 
+flags.DEFINE_string(
+    'pretrained_model_checkpoint_path', default=None,
+    help=('The directory where the pretrained model'))
+
 # Model specific flags
 flags.DEFINE_string(
     'data_dir', default=FAKE_DATA_DIR,
@@ -164,8 +168,11 @@ flags.DEFINE_string(
           ' will improve performance.'))
 flags.DEFINE_integer(
     'num_label_classes', default=1000, help='Number of classes, at least 2')
+
 flags.DEFINE_integer(
     'num_gpus', default=1, help='Number of gpu, at least 1')
+
+
 flags.DEFINE_float(
     'batch_norm_momentum',
     default=None,
@@ -263,6 +270,7 @@ def model_fn(features, labels, mode, params):
   if isinstance(features, dict):
     features = features['feature']
 
+
   # In most cases, the default data format NCHW instead of NHWC should be
   # used for a significant performance boost on GPU/TPU. NHWC should be used
   # only if the network needs to be run on CPU since the pooling operations
@@ -277,6 +285,8 @@ def model_fn(features, labels, mode, params):
   # Normalize the image to zero mean and unit variance.
   features -= tf.constant(MEAN_RGB, shape=[1, 1, 3], dtype=features.dtype)
   features /= tf.constant(STDDEV_RGB, shape=[1, 1, 3], dtype=features.dtype)
+
+  tf.summary.image('images', features, max_outputs=1)
 
   is_training = (mode == tf.estimator.ModeKeys.TRAIN)
   has_moving_average_decay = (FLAGS.moving_average_decay > 0)
@@ -295,6 +305,7 @@ def model_fn(features, labels, mode, params):
   if FLAGS.data_format:
     override_params['data_format'] = FLAGS.data_format
   if FLAGS.num_label_classes:
+    tf.logging.info('@@num_classes = {}'.format(FLAGS.num_label_classes))
     override_params['num_classes'] = FLAGS.num_label_classes
   if FLAGS.depth_coefficient:
     override_params['depth_coefficient'] = FLAGS.depth_coefficient
@@ -338,6 +349,13 @@ def model_fn(features, labels, mode, params):
       logits=logits,
       onehot_labels=one_hot_labels,
       label_smoothing=FLAGS.label_smoothing)
+
+  '''
+  print('@@VARIABLE!')
+  var_list_all = tf.contrib.framework.get_trainable_variables()
+  for v in var_list_all:
+    print(v)
+  '''
 
   # Add weight decay to the loss for non-batch-normalization variables.
   loss = cross_entropy + FLAGS.weight_decay * tf.add_n(
@@ -456,15 +474,16 @@ def model_fn(features, labels, mode, params):
       """
       predictions = tf.argmax(logits, axis=1)
       top_1_accuracy = tf.metrics.accuracy(labels, predictions)
-      in_top_5 = tf.cast(tf.nn.in_top_k(logits, labels, 5), tf.float32)
-      top_5_accuracy = tf.metrics.mean(in_top_5)
+      in_top_3 = tf.cast(tf.nn.in_top_k(logits, labels, 3), tf.float32)
+      top_3_accuracy = tf.metrics.mean(in_top_3)
 
       return {
           'top_1_accuracy': top_1_accuracy,
-          'top_5_accuracy': top_5_accuracy,
+          'top_3_accuracy': top_3_accuracy,
       }
 
-    eval_metrics = (metric_fn, [labels, logits])
+    #eval_metrics = (metric_fn, [labels, logits])
+    eval_metrics = metric_fn(labels, logits)
 
   num_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
   tf.logging.info('number of trainable parameters: {}'.format(num_params))
@@ -593,14 +612,20 @@ def main(unused_argv):
           per_host_input_for_training=tf.contrib.tpu.InputPipelineConfig
           .PER_HOST_V2))  # pylint: disable=line-too-long
   '''
-  distribution_strategy = tf.contrib.distribute.MirroredStrategy(num_gpus=FLAGS.num_gpus)
+  tf.logging.info('@@NUM GPUS = {}'.format(FLAGS.num_gpus))
+  distribution_strategy = tf.contrib.distribute.MirroredStrategy(
+                              num_gpus=FLAGS.num_gpus,
+                              cross_tower_ops=tf.contrib.distribute.AllReduceCrossTowerOps(
+                                'nccl', num_packs=FLAGS.num_gpus))
+  
+  session_config = tf.ConfigProto(
+                    inter_op_parallelism_threads=0,
+                    intra_op_parallelism_threads=0,
+                    allow_soft_placement=True)
 
   config = tf.estimator.RunConfig(
                   model_dir=FLAGS.model_dir,
-                  session_config=tf.ConfigProto(
-                    graph_options=tf.GraphOptions(
-                    rewrite_options=rewriter_config_pb2.RewriterConfig(
-                    disable_meta_optimizer=True))),
+                  session_config=session_config,
                   train_distribute=distribution_strategy,
                   save_checkpoints_steps=save_checkpoints_steps,
                   log_step_count_steps=FLAGS.log_step_count_steps,
@@ -612,8 +637,17 @@ def main(unused_argv):
       steps_per_epoch=FLAGS.num_train_images / FLAGS.train_batch_size,
       use_bfloat16=FLAGS.use_bfloat16,
       batch_size=batch_size)
+
+  if FLAGS.pretrained_model_checkpoint_path is not None:
+    tf.logging.info('@@PCKPT = {}'.format(FLAGS.pretrained_model_checkpoint_path))
+    warm_start_settings = tf.estimator.WarmStartSettings(FLAGS.pretrained_model_checkpoint_path,
+                                                         vars_to_warm_start='^(?!.*dense)')
+  else:
+    warm_start_settings = None
+
   est = tf.estimator.Estimator(
       model_fn=model_fn,
+      warm_start_from=warm_start_settings,
       config=config,
       params=params)
 
@@ -647,6 +681,8 @@ def main(unused_argv):
 
   if FLAGS.mode == 'eval':
     eval_steps = FLAGS.num_eval_images // FLAGS.eval_batch_size
+    tf.logging.info('@@NUM_EVAL_IMAGES = {}, EVAL_BATCH_SIZE = {}, EVAL_STEPS = {}'.format(
+                    FLAGS.num_eval_images, FLAGS.eval_batch_size, eval_steps))
     # Run evaluation when there's a new checkpoint
     for ckpt in evaluation.checkpoints_iterator(
         FLAGS.model_dir, timeout=FLAGS.eval_timeout):
@@ -725,7 +761,7 @@ def main(unused_argv):
         tf.logging.info('Eval results at step %d: %s',
                         next_checkpoint, eval_results)
         ckpt = tf.train.latest_checkpoint(FLAGS.model_dir)
-        utils.archive_ckpt(eval_results, eval_results['top_1_accuracy'], ckpt)
+        utils.archive_ckpt(eval_results, eval_results['top_3_accuracy'], ckpt)
 
       elapsed_time = int(time.time() - start_timestamp)
       tf.logging.info('Finished training up to step %d. Elapsed seconds %d.',

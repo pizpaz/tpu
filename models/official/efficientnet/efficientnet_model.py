@@ -425,5 +425,6 @@ class Model(tf.keras.Model):
         if self._dropout:
           outputs = self._dropout(outputs, training=training)
         outputs = self._fc(outputs)
+        tf.logging.info('Dense: %s shape: %s' % (outputs.name, outputs.shape))
         self.endpoints['head'] = outputs
     return outputs
