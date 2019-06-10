@@ -305,7 +305,6 @@ def model_fn(features, labels, mode, params):
   if FLAGS.data_format:
     override_params['data_format'] = FLAGS.data_format
   if FLAGS.num_label_classes:
-    tf.logging.info('@@num_classes = {}'.format(FLAGS.num_label_classes))
     override_params['num_classes'] = FLAGS.num_label_classes
   if FLAGS.depth_coefficient:
     override_params['depth_coefficient'] = FLAGS.depth_coefficient
@@ -497,7 +496,8 @@ def model_fn(features, labels, mode, params):
       loss=loss,
       train_op=train_op,
       eval_metric_ops=eval_metrics,
-      scaffold=_scaffold_fn if has_moving_average_decay else None)
+      #scaffold=_scaffold_fn if has_moving_average_decay else None)
+      scaffold=_scaffold_fn() if has_moving_average_decay else None)
 
 
 def _verify_non_empty_string(value, field_name):
@@ -612,8 +612,10 @@ def main(unused_argv):
           per_host_input_for_training=tf.contrib.tpu.InputPipelineConfig
           .PER_HOST_V2))  # pylint: disable=line-too-long
   '''
-  tf.logging.info('@@NUM GPUS = {}'.format(FLAGS.num_gpus))
-  distribution_strategy = tf.contrib.distribute.MirroredStrategy(
+  if FLAGS.num_gpus == 1:
+    distribution_strategy = tf.contrib.distribute.OneDeviceStrategy("device:GPU:0")
+  else:
+    distribution_strategy = tf.contrib.distribute.MirroredStrategy(
                               num_gpus=FLAGS.num_gpus,
                               cross_tower_ops=tf.contrib.distribute.AllReduceCrossTowerOps(
                                 'nccl', num_packs=FLAGS.num_gpus))
@@ -632,14 +634,12 @@ def main(unused_argv):
                   )
   # Initializes model parameters.
   batch_size = int(FLAGS.train_batch_size / FLAGS.num_gpus)
-  print('@@BATCH_SIZE1={}, num_gpus={}'.format(batch_size, FLAGS.num_gpus))
   params = dict(
       steps_per_epoch=FLAGS.num_train_images / FLAGS.train_batch_size,
       use_bfloat16=FLAGS.use_bfloat16,
       batch_size=batch_size)
 
   if FLAGS.pretrained_model_checkpoint_path is not None:
-    tf.logging.info('@@PCKPT = {}'.format(FLAGS.pretrained_model_checkpoint_path))
     warm_start_settings = tf.estimator.WarmStartSettings(FLAGS.pretrained_model_checkpoint_path,
                                                          vars_to_warm_start='^(?!.*dense)')
   else:
@@ -681,8 +681,6 @@ def main(unused_argv):
 
   if FLAGS.mode == 'eval':
     eval_steps = FLAGS.num_eval_images // FLAGS.eval_batch_size
-    tf.logging.info('@@NUM_EVAL_IMAGES = {}, EVAL_BATCH_SIZE = {}, EVAL_STEPS = {}'.format(
-                    FLAGS.num_eval_images, FLAGS.eval_batch_size, eval_steps))
     # Run evaluation when there's a new checkpoint
     for ckpt in evaluation.checkpoints_iterator(
         FLAGS.model_dir, timeout=FLAGS.eval_timeout):

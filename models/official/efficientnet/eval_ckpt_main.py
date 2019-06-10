@@ -23,6 +23,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+
 import json
 import sys
 from absl import app
@@ -90,11 +92,14 @@ class EvalCkptDriver(object):
 
   def build_model(self, features, is_training):
     """Build model with input features."""
+    print('@@@FEATURES = {}'.format(features))
     features -= tf.constant(MEAN_RGB, shape=[1, 1, 3], dtype=features.dtype)
     features /= tf.constant(STDDEV_RGB, shape=[1, 1, 3], dtype=features.dtype)
     logits, _ = efficientnet_builder.build_model(
         features, self.model_name, is_training)
+    print('@@@LOGITS = {}'.format(logits)) #(?, 1000)
     probs = tf.nn.softmax(logits)
+    print('@@@PROBS1= {}'.format(probs)) #(?, 1000)
     probs = tf.squeeze(probs)
     return probs
 
@@ -123,15 +128,19 @@ class EvalCkptDriver(object):
     with tf.Graph().as_default(), tf.Session() as sess:
       images, labels = self.build_dataset(image_files, labels, False)
       probs = self.build_model(images, is_training=False)
+      print('@PROBS = {}'.format(probs))
 
       sess.run(tf.global_variables_initializer())
       self.restore_model(sess, ckpt_dir)
 
       prediction_idx = []
       prediction_prob = []
+      print('@@BATCH = {}'.format(self.batch_size))
       for _ in range(len(image_files) // self.batch_size):
         out_probs = sess.run(probs)
+        print('out_probs = {}'.format(np.shape(out_probs))) #(251, )
         idx = np.argsort(out_probs)[::-1]
+        print('idx = {}'.format(np.shape(idx))) #(251,)
         prediction_idx.append(idx[:5])
         prediction_prob.append([out_probs[pid] for pid in idx[:5]])
 
@@ -181,26 +190,52 @@ def eval_imagenet(model_name,
   Returns:
     A tuple (top1, top5) for top1 and top5 accuracy.
   """
-  eval_ckpt_driver = EvalCkptDriver(model_name)
-  imagenet_val_labels = [int(i) for i in tf.gfile.GFile(imagenet_eval_label)]
-  imagenet_filenames = sorted(tf.gfile.Glob(imagenet_eval_glob))
+  eval_ckpt_driver = EvalCkptDriver(model_name, batch_size=128)
+
+  label2idx = {}
+  with open('/home1/irteam/user/blackrussian/wagon/data_collection/tfrecords/iFood2019/train_labels.txt', 'r') as fp:
+    for line in fp:
+      idx, label = line.strip().split(':')
+      label2idx[label] = int(idx)
+
+  gt_list = []
+  with open('/home1/irteam/user/blackrussian/wagon/data_collection/raw/iFood2019/val_labels.csv', 'r') as fp:
+    for line in fp:
+      file_name, label = line.strip().split(",")
+      gt_list.append(int(label2idx[label]))
+
+  filename_list = []
+  with open('/home1/irteam/user/blackrussian/wagon/data_collection/raw/iFood2019/val_labels.csv', 'r') as fp:
+    for line in fp:
+      file_name, _ = line.strip().split(",")
+      filename_list.append(file_name)
+
+  fullpath_list = []
+  for filename in filename_list:
+    fullpath_list.append(os.path.join('/home1/irteam/user/blackrussian/wagon/data_collection/raw/iFood2019/val_set', filename))
+
+  #imagenet_val_labels = [int(i) for i in tf.gfile.GFile(imagenet_eval_label)]
+  #imagenet_filenames = sorted(tf.gfile.Glob(imagenet_eval_glob))
+  imagenet_val_labels = gt_list
+  imagenet_filenames = fullpath_list
+
   if num_images < 0:
     num_images = len(imagenet_filenames)
   image_files = imagenet_filenames[:num_images]
   labels = imagenet_val_labels[:num_images]
 
   pred_idx, _ = eval_ckpt_driver.run_inference(ckpt_dir, image_files, labels)
-  top1_cnt, top5_cnt = 0.0, 0.0
+  top1_cnt, top3_cnt = 0.0, 0.0
   for i, label in enumerate(labels):
     top1_cnt += label in pred_idx[i][:1]
-    top5_cnt += label in pred_idx[i][:5]
+    top3_cnt += label in pred_idx[i][:3]
     if i % 100 == 0:
       print('Step {}: top1_acc = {:4.2f}%  top5_acc = {:4.2f}%'.format(
-          i, 100 * top1_cnt / (i + 1), 100 * top5_cnt / (i + 1)))
+          i, 100 * top1_cnt / (i + 1), 100 * top3_cnt / (i + 1)))
       sys.stdout.flush()
-  top1, top5 = 100 * top1_cnt / num_images, 100 * top5_cnt / num_images
-  print('Final: top1_acc = {:4.2f}%  top5_acc = {:4.2f}%'.format(top1, top5))
-  return top1, top5
+  top1, top3 = 100 * top1_cnt / num_images, 100 * top3_cnt / num_images
+  print('Final: top1_acc = {:4.2f}%  top5_acc = {:4.2f}%'.format(top1, top3))
+  return top1, top3
 
 
 def main(unused_argv):

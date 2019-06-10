@@ -363,8 +363,8 @@ class Model(tf.keras.Model):
     self._avg_pooling = tf.keras.layers.GlobalAveragePooling2D(
         data_format=self._global_params.data_format)
     self._fc = tf.layers.Dense(
-        self._global_params.num_classes,
-        kernel_initializer=dense_kernel_initializer)
+        units=self._global_params.num_classes,
+        kernel_initializer=dense_kernel_initializer, name='dense')
 
     if self._global_params.dropout_rate > 0:
       self._dropout = tf.keras.layers.Dropout(self._global_params.dropout_rate)
@@ -388,6 +388,7 @@ class Model(tf.keras.Model):
     with tf.variable_scope('stem'):
       outputs = relu_fn(
           self._bn0(self._conv_stem(inputs), training=training))
+    ('Built stem layers with output shape: %s' % outputs.shape)
     tf.logging.info('Built stem layers with output shape: %s' % outputs.shape)
     self.endpoints['stem'] = outputs
 

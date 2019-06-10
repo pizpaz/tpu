@@ -17,10 +17,202 @@ NUM_EVAL_IMAGES=11994
 ## 1epoch => 1,851 step when batch_size=64
 ## 1epoch => 462 step when batch_size=256
 
+visible_devices="1"
+num_gpus=`echo "${visible_devices}" | awk -F "," '{print NF}'`
+export CUDA_VISIBLE_DEVICES=${visible_devices}
+MODEL_NAME=efficientnet-b4
+MODEL_DIR=./train_model/iFood2019-b4-m8
+mkdir -p ${MODEL_DIR}
+BATCH_SIZE=16
+LR=0.002 # base learning rate 0.016 when batch size is 256.
+
+#BATCH_SIZE=256, 100epoch
+#TRAIN_STEPS=46200
+#STEPS_PER_EVAL=462
+
+#BATCH_SIZE=32, 100epoch
+TRAIN_STEPS=370200
+STEPS_PER_EVAL=3702
+
+
+python main.py \
+  --transpose_input=False \
+	--use_tpu=False \
+  --base_learning_rate=${LR} \
+  --num_gpus=${num_gpus} \
+	--data_dir=${DATA_DIR} \
+	--model_dir=${MODEL_DIR} \
+	--model_name=${MODEL_NAME} \
+	--train_batch_size=${BATCH_SIZE} \
+	--num_train_images=${NUM_TRAIN_IMAGES} \
+	--num_eval_images=${NUM_EVAL_IMAGES} \
+	--num_label_classes=${NUM_LABEL_CLASSES} \
+	--train_steps=${TRAIN_STEPS} \
+	--steps_per_eval=${STEPS_PER_EVAL}
+
+exit 1
+
+
+
+: '
 visible_devices="0"
 num_gpus=`echo "${visible_devices}" | awk -F "," '{print NF}'`
 export CUDA_VISIBLE_DEVICES=${visible_devices}
+MODEL_NAME=efficientnet-b3
+MODEL_DIR=./train_model/iFood2019-b3-m7
+mkdir -p ${MODEL_DIR}
+BATCH_SIZE=32
+LR=0.002 # base learning rate 0.016 when batch size is 256.
 
+#BATCH_SIZE=256, 100epoch
+#TRAIN_STEPS=46200
+#STEPS_PER_EVAL=462
+
+#BATCH_SIZE=32, 100epoch
+TRAIN_STEPS=370200
+STEPS_PER_EVAL=3702
+
+PCKPT=/home1/irteam/user/blackrussian/wagon/research_models/tpu/models/official/efficientnet/weight/efficientnet-b3
+
+python main.py \
+  --transpose_input=False \
+	--use_tpu=False \
+  --base_learning_rate=${LR} \
+  --num_gpus=${num_gpus} \
+	--data_dir=${DATA_DIR} \
+	--model_dir=${MODEL_DIR} \
+	--model_name=${MODEL_NAME} \
+	--train_batch_size=${BATCH_SIZE} \
+	--num_train_images=${NUM_TRAIN_IMAGES} \
+	--num_eval_images=${NUM_EVAL_IMAGES} \
+	--num_label_classes=${NUM_LABEL_CLASSES} \
+	--train_steps=${TRAIN_STEPS} \
+	--steps_per_eval=${STEPS_PER_EVAL} \
+  --pretrained_model_checkpoint_path=${PCKPT}
+'
+
+: '
+visible_devices="3"
+num_gpus=`echo "${visible_devices}" | awk -F "," '{print NF}'`
+export CUDA_VISIBLE_DEVICES=${visible_devices}
+MODEL_NAME=efficientnet-b0
+MODEL_DIR=./train_model/iFood2019-b0-m4
+mkdir -p ${MODEL_DIR}
+BATCH_SIZE=32
+LR=0.002 # base learning rate 0.016 when batch size is 256.
+
+#BATCH_SIZE=256, 100epoch
+#TRAIN_STEPS=46200
+#STEPS_PER_EVAL=462
+
+#BATCH_SIZE=32, 100epoch
+TRAIN_STEPS=370200
+STEPS_PER_EVAL=3702
+
+PCKPT=/home1/irteam/user/blackrussian/wagon/research_models/tpu/models/official/efficientnet/weight/efficientnet-b0
+
+python main.py \
+  	--transpose_input=False \
+	--use_tpu=False \
+  	--base_learning_rate=${LR} \
+  	--num_gpus=${num_gpus} \
+	--data_dir=${DATA_DIR} \
+	--model_dir=${MODEL_DIR} \
+	--model_name=${MODEL_NAME} \
+	--train_batch_size=${BATCH_SIZE} \
+	--num_train_images=${NUM_TRAIN_IMAGES} \
+	--num_eval_images=${NUM_EVAL_IMAGES} \
+	--num_label_classes=${NUM_LABEL_CLASSES} \
+	--train_steps=${TRAIN_STEPS} \
+	--steps_per_eval=${STEPS_PER_EVAL} \
+  --pretrained_model_checkpoint_path=${PCKPT} \
+	--weight_decay=0.001 \
+	--dropout_rate=0.3 \
+	--drop_connect_rate=0.3
+'
+
+: '
+visible_devices="2"
+num_gpus=`echo "${visible_devices}" | awk -F "," '{print NF}'`
+export CUDA_VISIBLE_DEVICES=${visible_devices}
+MODEL_NAME=efficientnet-b0
+MODEL_DIR=./train_model/iFood2019-b0-m3
+mkdir -p ${MODEL_DIR}
+BATCH_SIZE=32
+LR=0.002 # base learning rate 0.016 when batch size is 256.
+
+#BATCH_SIZE=256, 100epoch
+#TRAIN_STEPS=46200
+#STEPS_PER_EVAL=462
+
+#BATCH_SIZE=32, 100epoch
+TRAIN_STEPS=370200
+STEPS_PER_EVAL=3702
+
+PCKPT=/home1/irteam/user/blackrussian/wagon/research_models/tpu/models/official/efficientnet/weight/efficientnet-b0
+
+python main.py \
+  --transpose_input=False \
+	--use_tpu=False \
+  --base_learning_rate=${LR} \
+  --num_gpus=${num_gpus} \
+	--data_dir=${DATA_DIR} \
+	--model_dir=${MODEL_DIR} \
+	--model_name=${MODEL_NAME} \
+	--train_batch_size=${BATCH_SIZE} \
+	--num_train_images=${NUM_TRAIN_IMAGES} \
+	--num_eval_images=${NUM_EVAL_IMAGES} \
+	--num_label_classes=${NUM_LABEL_CLASSES} \
+	--train_steps=${TRAIN_STEPS} \
+	--steps_per_eval=${STEPS_PER_EVAL} \
+  --pretrained_model_checkpoint_path=${PCKPT}
+'
+
+: '
+visible_devices="1"
+num_gpus=`echo "${visible_devices}" | awk -F "," '{print NF}'`
+export CUDA_VISIBLE_DEVICES=${visible_devices}
+MODEL_NAME=efficientnet-b0
+MODEL_DIR=./train_model/iFood2019-b0-m2
+mkdir -p ${MODEL_DIR}
+BATCH_SIZE=32
+LR=0.002 # base learning rate 0.016 when batch size is 256.
+
+#BATCH_SIZE=256, 100epoch
+#TRAIN_STEPS=46200
+#STEPS_PER_EVAL=462
+
+#BATCH_SIZE=32, 100epoch
+TRAIN_STEPS=370200
+STEPS_PER_EVAL=3702
+
+PCKPT=/home1/irteam/user/blackrussian/wagon/research_models/tpu/models/official/efficientnet/weight/efficientnet-b0
+
+python main.py \
+  	--transpose_input=False \
+	--use_tpu=False \
+  	--base_learning_rate=${LR} \
+  	--num_gpus=${num_gpus} \
+	--data_dir=${DATA_DIR} \
+	--model_dir=${MODEL_DIR} \
+	--model_name=${MODEL_NAME} \
+	--train_batch_size=${BATCH_SIZE} \
+	--num_train_images=${NUM_TRAIN_IMAGES} \
+	--num_eval_images=${NUM_EVAL_IMAGES} \
+	--num_label_classes=${NUM_LABEL_CLASSES} \
+	--train_steps=${TRAIN_STEPS} \
+	--steps_per_eval=${STEPS_PER_EVAL} \
+  	--pretrained_model_checkpoint_path=${PCKPT} \
+	--weight_decay=0.001 \
+	--dropout_rate=0.1 \
+	--drop_connect_rate=0.1 \
+	--moving_average_decay=0.0
+'
+
+: '
+visible_devices="0"
+num_gpus=`echo "${visible_devices}" | awk -F "," '{print NF}'`
+export CUDA_VISIBLE_DEVICES=${visible_devices}
 MODEL_NAME=efficientnet-b0
 MODEL_DIR=./train_model/iFood2019-b0-m1
 mkdir -p ${MODEL_DIR}
@@ -53,6 +245,7 @@ python main.py \
 	--steps_per_eval=${STEPS_PER_EVAL} \
   --pretrained_model_checkpoint_path=${PCKPT} \
 	--moving_average_decay=0.0
+'
 
 : '
 visible_devices="0"
